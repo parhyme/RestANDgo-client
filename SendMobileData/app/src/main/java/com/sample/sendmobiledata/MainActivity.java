@@ -2,7 +2,6 @@ package com.sample.sendmobiledata;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -18,6 +17,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.jaredrummler.android.device.DeviceName;
+import com.sample.sendmobiledata.models.MobileInfo;
+import com.sample.sendmobiledata.services.InfoService;
 
 import java.util.UUID;
 
@@ -36,7 +37,11 @@ public class MainActivity extends AppCompatActivity {
     private String buildModel;
     private String buildVersion;
     private int batteryLevel;
-    private static final int REQUEST_CODE = 101;
+
+    public static final String ANDROID_ID = "android_id";
+    public static final String BATTERY_LEVEL = "battery_level";
+    public static final String MODEL_NAME = "model_name";
+    public static final String ANDROID_VERSION = "android_version";
 
     private JsonPlaceHolderApi jsonPlaceHolderApi;
     private MobileInfo mobileInfo;
@@ -56,69 +61,42 @@ public class MainActivity extends AppCompatActivity {
         buildModel = DeviceName.getDeviceName();
         buildVersion = Build.VERSION.RELEASE;
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl("http://10.0.3.2:8000/api/v1/")
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        showInfo();
 
-        jsonPlaceHolderApi = retrofit.create(JsonPlaceHolderApi.class);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent serviceIntent = new Intent(getBaseContext(), InfoService.class);
+                serviceIntent.putExtra(ANDROID_ID,IMEINumber);
+                serviceIntent.putExtra(MODEL_NAME, buildModel);
+                serviceIntent.putExtra(BATTERY_LEVEL,batteryLevel);
+                serviceIntent.putExtra(ANDROID_VERSION,buildVersion);
+
+                startService(serviceIntent);
+            }
+        });
+
+    }
+
+    /**
+     *  show mobile info in the text view.
+     */
+    private void showInfo() {
 
         String content = "";
 
         content += "ID: " + IMEINumber + "\n";
         content += "MODEL: " + buildModel + "\n";
         content += "VERSION: " + buildVersion + "\n";
-        content += "Battery: " + batteryLevel + "\n";
 
         tv.setText(content);
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                creatMobileInfo();
-
-            }
-        });
-
     }
 
-    private void creatMobileInfo() {
-        String id =  UUID.randomUUID().toString();
-        mobileInfo = new MobileInfo(buildModel,id,IMEINumber,batteryLevel,buildVersion);
-
-        Call<MobileInfo> call = jsonPlaceHolderApi.creatMobileInfo(mobileInfo);
-
-        call.enqueue(new Callback<MobileInfo>() {
-            @Override
-            public void onResponse(Call<MobileInfo> call, Response<MobileInfo> response) {
-                if(!response.isSuccessful()){
-                    tv.setText(response.message());
-                    return;
-                }
-
-                MobileInfo mfResponse = response.body();
-
-                String content = "";
-
-                content += "ID: " + mfResponse.getAndroidId() + "\n";
-                content += "MODEL: " + mfResponse.getModel_name() + "\n";
-                content += "CODE: " + response.code() + "\n";
-
-                tv.setText(content);
-
-            }
-
-
-            @Override
-            public void onFailure(Call<MobileInfo> call, Throwable t) {
-                Toast.makeText(getBaseContext(),"SEND FAILED "+ t.getMessage(),Toast.LENGTH_LONG).show();
-            }
-        });
-    }
-
+    /**
+     *  As of Android Q, the os simply doesn't return IMEI number of the
+     * device to third-party apps, therefore we get another unique id called ANDROID_ID.
+    */
     public static String getDeviceId(Context context) {
-        /* As of Android Q, the os simply doesn't return IMEI number of the
-        device to third-party apps, therefore we get another unique id called ANDROID_ID.
-        */
         String deviceId;
 
         if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -140,6 +118,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void cnfBatteryLevel() {
+        /* getting the battery level
+        and normalizing the value.
+        */
         BroadcastReceiver batteryLevelReceiver = new BroadcastReceiver() {
             public void onReceive(Context context, Intent intent) {
                 context.unregisterReceiver(this);
@@ -150,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
                     level = (rawlevel * 100) / scale;
                 }
                 batteryLevel = level;
+                tv.append("Battery: " + batteryLevel);//appending now because it updates the value last
             }
         };
         IntentFilter batteryLevelFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);

@@ -21,6 +21,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name=".services.InfoService"
+            android:enabled="true" />
     </application>
 
 </manifest>
